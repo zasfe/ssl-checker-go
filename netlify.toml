@@ -1,0 +1,10 @@
+# netlify.toml 파일
+
+[build]
+  command = "go build -o main"
+  publish = "."
+  
+[[redirects]]
+  from = "/*"
+  to = "/main"
+  status = 200
