@@ -1,5 +1,5 @@
 module check-ssl
 
-go 1.21
+go 1.13
 
-require github.com/aws/aws-lambda-go v1.47.0
+require github.com/aws/aws-lambda-go v1.49.0 // indirect
