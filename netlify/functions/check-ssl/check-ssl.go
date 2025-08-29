@@ -16,20 +16,20 @@ import (
 
 // CertInfo는 개별 인증서의 상세 정보를 담는 구조체입니다.
 type CertInfo struct {
-	Subject      string    `json:"subject"`
-	Issuer       string    `json:"issuer"`
-	NotBefore    time.Time `json:"not_before"`
-	NotAfter     time.Time `json:"not_after"`
-	DNSNames     []string  `json:"dns_names,omitempty"` // 사이트 인증서에만 포함
-	IsCA         bool      `json:"is_ca"`
+	Subject       string    `json:"subject"`
+	Issuer        string    `json:"issuer"`
+	NotBefore     time.Time `json:"not_before"`
+	NotAfter      time.Time `json:"not_after"`
+	DNSNames      []string  `json:"dns_names,omitempty"` // 사이트 인증서에만 포함
+	IsCA          bool      `json:"is_ca"`
 	SignatureAlgo string    `json:"signature_algorithm"`
 }
 
 // Response는 API 응답의 전체 구조입니다.
 type Response struct {
-	TargetURL        string     `json:"target_url"`
-	Certificates     []CertInfo `json:"certificates"`
-	ChainValidation  string     `json:"chain_validation_message"`
+	TargetURL       string     `json:"target_url"`
+	Certificates    []CertInfo `json:"certificates"`
+	ChainValidation string     `json:"chain_validation_message"`
 }
 
 // 에러 응답을 생성하는 헬퍼 함수
@@ -48,12 +48,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if ip == "" || hostname == "" {
 		return createErrorResponse(400, "Query parameters 'ip' and 'url' are required.")
 	}
-
-	// URL에서 호스트명만 정확히 추출
-	parsedURL, err := url.Parse(hostname)
-	if err == nil && parsedURL.Host != "" {
-		hostname = parsedURL.Host
-	}
+    
+    // URL에서 호스트명만 정확히 추출 (예: "https://www.google.com" -> "www.google.com")
+	if u, err := url.Parse(hostname); err == nil && u.Host != "" {
+		hostname = u.Host
+	} else if u, err := url.Parse("https://" + hostname); err == nil && u.Host != "" {
+        hostname = u.Host
+    }
 
 
 	// TCP 연결 주소 설정
@@ -78,17 +79,17 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// 각 인증서 정보 파싱
 	var certInfos []CertInfo
-	for _, cert := range certs {
+	for i, cert := range certs {
 		info := CertInfo{
-			Subject:      cert.Subject.String(),
-			Issuer:       cert.Issuer.String(),
-			NotBefore:    cert.NotBefore.UTC(),
-			NotAfter:     cert.NotAfter.UTC(),
-			IsCA:         cert.IsCA,
+			Subject:       cert.Subject.String(),
+			Issuer:        cert.Issuer.String(),
+			NotBefore:     cert.NotBefore.UTC(),
+			NotAfter:      cert.NotAfter.UTC(),
+			IsCA:          cert.IsCA,
 			SignatureAlgo: cert.SignatureAlgorithm.String(),
 		}
 		// 사이트 인증서(첫 번째)에만 SANs 정보 추가
-		if len(certInfos) == 0 {
+		if i == 0 {
 			info.DNSNames = cert.DNSNames
 		}
 		certInfos = append(certInfos, info)
@@ -105,12 +106,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	validationOpts := x509.VerifyOptions{
 		DNSName:       hostname,
 		Intermediates: intermediates,
-		// 시스템의 루트 CA 풀을 사용
-		// Netlify(AWS Lambda) 환경에 내장된 루트 CA 목록을 사용하게 됩니다.
 	}
 	
 	validationMessage := "Certificate chain is valid."
-	if _, err := certs.Verify(validationOpts); err != nil {
+	if _, err := certs[0].Verify(validationOpts); err != nil {
 		validationMessage = fmt.Sprintf("Certificate chain verification failed: %s", err.Error())
 	}
 
